@@ -60,6 +60,29 @@ resource "docker_container" "load_balancer" {
       file    = "/etc/nginx/nginx.conf"
     }
 }
+
+resource "docker_container" "socket_proxy" {
+name  = "docker-proxy"
+image = "tecnativa/docker-socket-proxy"
+
+volumes {
+host_path      = "/var/run/docker.sock"
+container_path = "/var/run/docker.sock"
+read_only      = true
+}
+
+env = [
+"CONTAINERS=1", 
+"IMAGES=1",     
+"NETWORKS=1",   
+"POST=0"        
+]
+
+networks_advanced {
+name = docker_network.private_network.name
+}
+}
+
 resource "docker_container" "monitor"{
   name  = "cluster_monitor"
   image = "nicolargo/glances:latest"
@@ -67,9 +90,12 @@ resource "docker_container" "monitor"{
     internal = 61208
     external = 61208
   }
-  volumes {
-    host_path      = "/var/run/docker.sock"
-    container_path = "/var/run/docker.sock"
-  }
-  command = ["glances", "-w"]
-} 
+
+env = [
+"DOCKER_HOST=tcp://docker-proxy:2375"
+]
+
+depends_on = [docker_container.socket_proxy]
+
+command = ["glances", "-w"]
+}
